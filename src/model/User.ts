@@ -8,6 +8,8 @@ export interface IUser extends Document {
   password: string;
   refreshToken?: string;
   isAdmin: boolean;
+  resetOTP?: string;
+  resetOTPExpiry?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,7 +20,9 @@ const UserSchema: Schema = new Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     refreshToken: { type: String },
-    isAdmin: {type: Boolean, default: false},
+    isAdmin: { type: Boolean, default: false },
+    resetOTP: { type: String },
+    resetOTPExpiry: { type: Date },
   },
   { timestamps: true }
 );
