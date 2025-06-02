@@ -7,6 +7,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   refreshToken?: string;
+  isAdmin: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,6 +18,7 @@ const UserSchema: Schema = new Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     refreshToken: { type: String },
+    isAdmin: {type: Boolean, default: false},
   },
   { timestamps: true }
 );

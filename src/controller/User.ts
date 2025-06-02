@@ -5,15 +5,15 @@ import { comparePassword, hashPassword } from '../utils/Password';
 
 export const signup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Add explicit check for body existence
     if (!req.body || Object.keys(req.body).length === 0) {
       res.status(400).json({ message: 'Request body is empty' });
       return;
     }
 
     const { username, email, password } = req.body;
+    let { isAdmin } = req.body;
 
-    // More detailed validation
+    // Validation
     if (!username?.trim()) {
       res.status(400).json({ message: 'Username is required' });
       return;
@@ -27,23 +27,34 @@ export const signup = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    // Rest of your signup logic...
+    // Prevent self-assignment of admin role
+    isAdmin = false; // Default to false, admin must be set manually in DB
+
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
     if (existingUser) {
       res.status(400).json({ message: 'User already exists' });
       return;
     }
 
-    const user = new User({ username, email, password });
+    const user = new User({ 
+      username, 
+      email, 
+      password,
+      isAdmin
+    });
+
     await user.save();
 
     const accessToken = generateAccessToken({ 
       userId: user._id.toString(), 
-      username: user.username 
+      username: user.username,
+      isAdmin: user.isAdmin
     });
+    
     const refreshToken = generateRefreshToken({ 
       userId: user._id.toString(), 
-      username: user.username 
+      username: user.username,
+      isAdmin: user.isAdmin
     });
 
     user.refreshToken = refreshToken;
@@ -57,6 +68,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction): P
         id: user._id,
         username: user.username,
         email: user.email,
+        isAdmin: user.isAdmin
       },
     });
   } catch (error) {
@@ -64,9 +76,15 @@ export const signup = async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 };
+
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { username, password } = req.body;
+
+    if (!username || !password) {
+      res.status(400).json({ message: 'Username and password are required' });
+      return;
+    }
 
     const user = await User.findOne({ username });
     if (!user) {
@@ -82,11 +100,14 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
     const accessToken = generateAccessToken({ 
       userId: user._id.toString(), 
-      username: user.username 
+      username: user.username,
+      isAdmin: user.isAdmin
     });
+    
     const refreshToken = generateRefreshToken({ 
       userId: user._id.toString(), 
-      username: user.username 
+      username: user.username,
+      isAdmin: user.isAdmin
     });
 
     user.refreshToken = refreshToken;
@@ -100,6 +121,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         id: user._id,
         username: user.username,
         email: user.email,
+        isAdmin: user.isAdmin
       },
     });
   } catch (error) {
@@ -112,7 +134,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      res.status(401).json({ message: 'Refresh token is required' });
+      res.status(400).json({ message: 'Refresh token is required' });
       return;
     }
 
@@ -127,6 +149,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     const newAccessToken = generateAccessToken({
       userId: user._id.toString(),
       username: user.username,
+      isAdmin: user.isAdmin
     });
 
     res.json({
@@ -140,6 +163,12 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { userId } = req.body;
+    
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
+      return;
+    }
+
     await User.findByIdAndUpdate(userId, { refreshToken: null });
     res.json({ message: 'Logged out successfully' });
   } catch (error) {

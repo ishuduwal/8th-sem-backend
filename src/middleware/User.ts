@@ -6,6 +6,7 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
     username: string;
+    isAdmin: boolean;  // Add this
   };
 }
 
@@ -30,9 +31,26 @@ export const authenticate = async (
       return;
     }
 
-    req.user = decoded;
+    req.user = {
+      userId: decoded.userId,
+      username: decoded.username,
+      isAdmin: decoded.isAdmin  // Add this
+    };
     next();
   } catch (error) {
     next(error);
   }
+};
+
+// Add admin middleware
+export const isAdmin = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user?.isAdmin) {
+    res.status(403).json({ message: 'Admin access required' });
+    return;
+  }
+  next();
 };

@@ -12,6 +12,7 @@ const REFRESH_TOKEN_EXPIRY ='1d';
 interface TokenPayload {
     userId: string;
     username: string;
+    isAdmin: boolean;
 }
 
 export const generateAccessToken = (payload: TokenPayload): string =>{
