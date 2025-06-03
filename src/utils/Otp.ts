@@ -117,8 +117,6 @@ export const sendOTPEmail = async (email: string, otp: string, username: string)
           <p>• If you didn't request this, please ignore this email</p>
         </div>
         
-        <p style="margin-top: 25px;">Need help? Contact our support team.</p>
-        
         <div class="footer">
           <p>&copy; 2025 Haina Hola. All rights reserved.</p>
         </div>
