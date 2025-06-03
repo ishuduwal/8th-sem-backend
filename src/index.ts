@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import userRouter from "./router/User";
 import cors from "cors";
+import categoryRouter from "./router/Category";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/users', userRouter);
+app.use('/api/category', categoryRouter);
 
 mongoose.connect(mongodb).then(() => {
     console.log('Connected to mongodb');
