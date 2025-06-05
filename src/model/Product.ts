@@ -1,19 +1,21 @@
+// model/Product.ts
 import mongoose, {Document, Schema} from "mongoose";
 
 export interface IProduct extends Document {
     title: string;
     description: string;
-    price: string;
-    category:mongoose.Types.ObjectId;
-    mainImage:string;
+    originalPrice: number;
+    price: number; // This will be the discounted price
+    category: mongoose.Types.ObjectId;
+    mainImage: string;
     additionalImages: string[];
     createdAt: Date;
     updatedAt: Date;
 }
 
 const ProductSchema: Schema = new Schema ({
-    title:{
-        type:String,
+    title: {
+        type: String,
         required: true,
         trim: true
     },
@@ -21,6 +23,11 @@ const ProductSchema: Schema = new Schema ({
         type: String,
         required: true,
         trim: true
+    },
+    originalPrice: {
+        type: Number,
+        required: true,
+        min: 0
     },
     price: {
         type: Number,
@@ -41,6 +48,14 @@ const ProductSchema: Schema = new Schema ({
     }]
 }, {
     timestamps: true
-})
+});
+
+// Middleware to set originalPrice and price before saving
+ProductSchema.pre('save', async function(next) {
+    if (this.isNew || this.isModified('originalPrice')) {
+        this.price = this.originalPrice;
+    }
+    next();
+});
 
 export default mongoose.model<IProduct>('Product', ProductSchema);
