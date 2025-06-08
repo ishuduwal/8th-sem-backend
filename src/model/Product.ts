@@ -1,5 +1,4 @@
-// model/Product.ts
-import mongoose, {Document, Schema} from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IProduct extends Document {
     title: string;
@@ -13,7 +12,7 @@ export interface IProduct extends Document {
     updatedAt: Date;
 }
 
-const ProductSchema: Schema = new Schema ({
+const ProductSchema: Schema = new Schema({
     title: {
         type: String,
         required: true,

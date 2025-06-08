@@ -1,4 +1,3 @@
-// routes/Discount.ts
 import express from 'express';
 import {
     createDiscount,
@@ -11,7 +10,7 @@ import {
 
 const discountRouter = express.Router();
 
-// Apply discount status check middleware to relevant routes
+// Apply the middleware to all discount routes
 discountRouter.use(checkDiscountStatus);
 
 discountRouter.post('/', createDiscount);

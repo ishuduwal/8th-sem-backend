@@ -42,6 +42,7 @@ const calculateSimilarity = (product1: IProduct, product2: IProduct): number => 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
     try {
         const { title, description, price, category, mainImage, additionalImages } = req.body;
+        
 
         if (!title || !description || !price || !category || !mainImage) {
             res.status(400).json({ success: false, message: 'Required fields are missing' });
