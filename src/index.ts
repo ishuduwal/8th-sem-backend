@@ -4,8 +4,6 @@ import dotenv from "dotenv";
 import userRouter from "./router/User";
 import cors from "cors";
 import categoryRouter from "./router/Category";
-import productRouter from "./router/Product";
-import discountRouter from "./router/Discount";
 
 dotenv.config();
 
@@ -17,6 +15,7 @@ app.use(cors());
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true })); 
 
+
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   console.log('Request Body:', req.body);
@@ -24,12 +23,11 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/users', userRouter);
-app.use('/api/category', categoryRouter);
-app.use('/api/product', productRouter);
-app.use('/api/discount', discountRouter);
+app.use('/api/categories', categoryRouter);
 
 mongoose.connect(mongodb).then(() => {
     console.log('Connected to mongodb');
+    console.log("Hwllo from sever");
     app.listen(PORT, () => {
         console.log(`Server is running at http://localhost:${PORT}`);
     });

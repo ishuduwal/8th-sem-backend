@@ -1,18 +1,19 @@
-import express from 'express';
+import express, { Router } from "express";
+import upload from "../middleware/Upload";
 import {
-    createCategory,
-    getAllCategories,
-    getCategoryById,
-    updateCategory,
-    deleteCategory
-} from '../controller/Category';
+  createCategory,
+  getAllCategories,
+  getCategoryById,
+  updateCategory,
+  deleteCategory,
+} from "../controller/Category";
 
-const categoryRouter = express.Router();
+const categoryRouter = Router();
 
-categoryRouter.post('/', createCategory);
-categoryRouter.get('/', getAllCategories);
-categoryRouter.get('/:id', getCategoryById);
-categoryRouter.put('/:id', updateCategory);
-categoryRouter.delete('/:id', deleteCategory);
+categoryRouter.post("/", upload.single("image"), createCategory);
+categoryRouter.get("/", getAllCategories);
+categoryRouter.get("/:id", getCategoryById);
+categoryRouter.put("/:id", upload.single("image"), updateCategory);
+categoryRouter.delete("/:id", deleteCategory);
 
 export default categoryRouter;
