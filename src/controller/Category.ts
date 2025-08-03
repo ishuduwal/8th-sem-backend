@@ -1,19 +1,16 @@
-
 import { Request, Response } from "express";
-import { uploadToCloudinary } from "../utils/Cloudinary";
+import { uploadToCloudinary, deleteFromCloudinary } from "../utils/Cloudinary";
 import Category from "../model/Category";
 
+const CLOUDINARY_FOLDER = 'categories';
 
-// Create Category
 export const createCategory = async (req: Request, res: Response) => {
   try {
-    console.log('Request body:', req.body);  // Add this line
-    console.log('File:', req.file);     
     const { name, description } = req.body;
     let imageUrl;
 
     if (req.file) {
-      imageUrl = await uploadToCloudinary(req.file.buffer);
+      imageUrl = await uploadToCloudinary(req.file.buffer, CLOUDINARY_FOLDER);
     }
 
     const newCategory = new Category({
@@ -29,7 +26,6 @@ export const createCategory = async (req: Request, res: Response) => {
   }
 };
 
-// Get All Categories
 export const getAllCategories = async (_req: Request, res: Response) => {
   try {
     const categories = await Category.find();
@@ -39,17 +35,19 @@ export const getAllCategories = async (_req: Request, res: Response) => {
   }
 };
 
-// Get Category by ID
 export const getCategoryById = async (req: Request, res: Response) => {
-  const category = await Category.findById(req.params.id);
-  if (!category) {
-    res.status(404).json({ error: "Not found" });
-    return;
+  try {
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      res.status(404).json({ error: "Category not found" });
+      return;
+    }
+    res.status(200).json(category);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching category" });
   }
-  res.status(200).json(category);
 };
 
-// Update Category
 export const updateCategory = async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
@@ -60,28 +58,56 @@ export const updateCategory = async (req: Request, res: Response) => {
       return;
     }
 
+    // Store old image URL for deletion if new image is uploaded
+    let oldImageUrl: string | null = null;
+
     if (req.file) {
-      const imageUrl = await uploadToCloudinary(req.file.buffer);
+      if (category.image) {
+        oldImageUrl = category.image;
+      }
+      const imageUrl = await uploadToCloudinary(req.file.buffer, CLOUDINARY_FOLDER);
       category.image = imageUrl;
     }
 
     category.name = name || category.name;
     category.description = description || category.description;
 
-    await category.save();
-    res.status(200).json(category);
+    const updatedCategory = await category.save();
+
+    // Delete old image after successful update
+    if (oldImageUrl) {
+      try {
+        await deleteFromCloudinary(oldImageUrl);
+      } catch (error) {
+        console.error('Error deleting old image:', error);
+      }
+    }
+
+    res.status(200).json(updatedCategory);
   } catch (error) {
     res.status(500).json({ error: "Error updating category", details: error });
   }
 };
 
-// Delete Category
 export const deleteCategory = async (req: Request, res: Response) => {
   try {
-    const deleted = await Category.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    const category = await Category.findById(req.params.id);
+    
+    if (!category) {
       res.status(404).json({ error: "Category not found" });
       return;
+    }
+
+    const imageUrl = category.image;
+
+    await category.deleteOne();
+
+    if (imageUrl) {
+      try {
+        await deleteFromCloudinary(imageUrl);
+      } catch (error) {
+        console.error('Error deleting image:', error);
+      }
     }
 
     res.status(200).json({ message: "Category deleted successfully" });
@@ -89,4 +115,3 @@ export const deleteCategory = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Error deleting category", details: error });
   }
 };
-
