@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import upload from "../middleware/Upload";
+import {upload} from "../middleware/Upload";
 import {
   createCategory,
   getAllCategories,
