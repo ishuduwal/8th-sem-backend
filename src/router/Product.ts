@@ -9,5 +9,6 @@ productRouter.get('/', productController.getAllProducts);
 productRouter.get('/:id', productController.getProductById);
 productRouter.put('/:id', multiUpload, productController.updateProduct);
 productRouter.delete('/:id', productController.deleteProduct);
+productRouter.get('/:id/recommendations', productController.recommendProducts);
 
 export default productRouter;

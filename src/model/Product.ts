@@ -1,9 +1,10 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IProduct extends Document {
+    _id: mongoose.Types.ObjectId;
     name: string;
     price: number;
-    description?: string;
+    description: string;
     mainImage: string;
     subImages?: string[];
     stock: number;
@@ -25,9 +26,10 @@ const ProductSchema: Schema = new Schema({
         min: 0
     },
     description: {
-        type: String,
-        trim: true
-    },
+    type: String,
+    required: true,
+    default: ""
+  },
     mainImage: {
         type: String,
         required: true

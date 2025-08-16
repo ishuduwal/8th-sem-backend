@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { uploadToCloudinary, deleteFromCloudinary } from '../utils/Cloudinary';
-import Product from '../model/Product';
+import Product, { IProduct } from '../model/Product';
 import mongoose from 'mongoose';
 
 const CLOUDINARY_FOLDER = 'products';
@@ -173,5 +173,75 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
         res.status(200).json({ message: "Product deleted successfully" });
     } catch (error) {
         res.status(500).json({ error: "Error deleting product", details: error });
+    }
+};
+
+export const recommendProducts = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            res.status(400).json({ message: "Invalid product ID" });
+            return;
+        }
+
+        const targetProduct = await Product.findById(id)
+            .select('name description category price mainImage');
+            
+        if (!targetProduct) {
+            res.status(404).json({ message: "Product not found" });
+            return;
+        }
+
+        if (!targetProduct.description || typeof targetProduct.description !== 'string') {
+            res.status(400).json({ message: "Product description is required for recommendations" });
+            return;
+        }
+
+        const products = await Product.find({
+            _id: { $ne: id },
+            description: { $exists: true, $ne: null, $type: 'string' }
+        }).select('name description category price mainImage');
+
+        const calculateSimilarityScore = (product: IProduct): number => {
+            const categorySimilarity = targetProduct.category.equals(product.category) ? 1 : 0;
+
+            const targetDescription = targetProduct.description.toLowerCase();
+            const productDescription = product.description.toLowerCase();
+            
+            const targetWords = new Set(targetDescription.split(/\s+/));
+            const productWords = new Set(productDescription.split(/\s+/));
+            
+            const sharedWords = [...targetWords].filter(word => 
+                word && productWords.has(word)
+            ).length;
+
+            return sharedWords + categorySimilarity;
+        };
+
+        const recommendations = products
+            .map(product => ({
+                product: {
+                    _id: product._id,
+                    name: product.name,
+                    price: product.price,
+                    description: product.description,
+                    mainImage: product.mainImage,
+                    category: product.category
+                },
+                score: calculateSimilarityScore(product)
+            }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score);
+
+        res.status(200).json({
+            message: "Recommendations generated successfully",
+            recommendations: recommendations.slice(0, 5).map(rec => rec.product),
+        });
+    } catch (error) {
+        console.error("Error generating recommendations:", error);
+        res.status(500).json({ 
+            message: "Error generating recommendations",
+        });
     }
 };
