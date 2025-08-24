@@ -6,8 +6,8 @@ dotenv.config();
 const transporter = nodemailer.createTransport({
   service: 'gmail', 
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, 
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS, 
   },
 });
 
@@ -107,7 +107,7 @@ export const sendOTPEmail = async (email: string, otp: string, username: string)
         <div class="otp-box">
           <div style="margin-bottom: 5px; color: #64748b;">Enter this code to continue:</div>
           <div class="otp-code">${otp}</div>
-          <div style="font-size: 14px; color: #64748b;">Expires in 2 minutes</div>
+          <div style="font-size: 14px; color: #64748b;">Expires in 5 minutes</div>
         </div>
         
         <div class="note">
@@ -118,7 +118,7 @@ export const sendOTPEmail = async (email: string, otp: string, username: string)
         </div>
         
         <div class="footer">
-          <p>&copy; 2025 Haina Hola. All rights reserved.</p>
+          <p>&copy; 2025 Haina Hola Ki Ho. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -126,7 +126,7 @@ export const sendOTPEmail = async (email: string, otp: string, username: string)
   `;
 
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: process.env.GMAIL_USER,
     to: email,
     subject: 'Your Password Reset Code',
     html: htmlContent,

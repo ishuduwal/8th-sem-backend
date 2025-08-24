@@ -202,7 +202,8 @@ export const requestPasswordReset = async (req: Request, res: Response, next: Ne
     }
 
     const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes from now
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
 
     user.resetOTP = otp;
     user.resetOTPExpiry = otpExpiry;
@@ -290,7 +291,7 @@ export const resendOTP = async (req: Request, res: Response, next: NextFunction)
     }
 
     const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes from now
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
     user.resetOTP = otp;
     user.resetOTPExpiry = otpExpiry;
@@ -301,6 +302,52 @@ export const resendOTP = async (req: Request, res: Response, next: NextFunction)
     res.json({ message: 'New OTP sent to your email. Valid for 2 minutes.' });
   } catch (error) {
     console.error('Resend OTP error:', error);
+    next(error);
+  }
+};
+
+export const verifyOTP = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email?.trim() || !otp?.trim()) {
+      res.status(400).json({ message: 'Email and OTP are required' });
+      return;
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(400).json({ message: 'Invalid request' });
+      return;
+    }
+
+    if (!user.resetOTP || !user.resetOTPExpiry) {
+      res.status(400).json({ message: 'No OTP request found. Please request a new OTP.' });
+      return;
+    }
+
+    if (new Date() > user.resetOTPExpiry) {
+      // Clear expired OTP
+      user.resetOTP = undefined;
+      user.resetOTPExpiry = undefined;
+      await user.save();
+      
+      res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+      return;
+    }
+
+    if (user.resetOTP !== otp) {
+      res.status(400).json({ message: 'Invalid OTP' });
+      return;
+    }
+
+    // OTP is valid, but don't reset anything yet
+    res.json({ 
+      message: 'OTP verified successfully',
+      verified: true 
+    });
+  } catch (error) {
+    console.error('OTP verification error:', error);
     next(error);
   }
 };
