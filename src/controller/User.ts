@@ -194,27 +194,49 @@ export const requestPasswordReset = async (req: Request, res: Response, next: Ne
       return;
     }
 
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ message: 'Invalid email format' });
+      return;
+    }
+
     const user = await User.findOne({ email });
     if (!user) {
-      
-      res.json({ message: 'If the email exists, an OTP has been sent' });
+      // Return an error for non-existent email instead of generic success
+      res.status(404).json({ 
+        message: 'No account found with this email address. Please check your email or sign up for a new account.' 
+      });
       return;
     }
 
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
-
     user.resetOTP = otp;
     user.resetOTPExpiry = otpExpiry;
     await user.save();
 
-    await sendOTPEmail(user.email, otp, user.username);
-
-    res.json({ 
-      message: 'OTP sent to your email. Valid for 2 minutes.',
-      email: user.email 
-    });
+    try {
+      await sendOTPEmail(user.email, otp, user.username);
+      
+      res.json({ 
+        message: 'OTP sent to your email. Valid for 5 minutes.',
+        email: user.email,
+        success: true
+      });
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+      
+      // Clear the OTP if email sending failed
+      user.resetOTP = undefined;
+      user.resetOTPExpiry = undefined;
+      await user.save();
+      
+      res.status(500).json({ 
+        message: 'Failed to send OTP email. Please try again later.' 
+      });
+    }
   } catch (error) {
     console.error('Password reset request error:', error);
     next(error);
@@ -237,7 +259,7 @@ export const verifyOTPAndResetPassword = async (req: Request, res: Response, nex
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(400).json({ message: 'Invalid request' });
+      res.status(404).json({ message: 'No account found with this email address' });
       return;
     }
 
@@ -257,7 +279,7 @@ export const verifyOTPAndResetPassword = async (req: Request, res: Response, nex
     }
 
     if (user.resetOTP !== otp) {
-      res.status(400).json({ message: 'Invalid OTP' });
+      res.status(400).json({ message: 'Invalid OTP. Please check your code and try again.' });
       return;
     }
 
@@ -286,7 +308,7 @@ export const resendOTP = async (req: Request, res: Response, next: NextFunction)
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(400).json({ message: 'Invalid request' });
+      res.status(404).json({ message: 'No account found with this email address' });
       return;
     }
 
@@ -297,9 +319,21 @@ export const resendOTP = async (req: Request, res: Response, next: NextFunction)
     user.resetOTPExpiry = otpExpiry;
     await user.save();
 
-    await sendOTPEmail(user.email, otp, user.username);
-
-    res.json({ message: 'New OTP sent to your email. Valid for 2 minutes.' });
+    try {
+      await sendOTPEmail(user.email, otp, user.username);
+      res.json({ message: 'New OTP sent to your email. Valid for 5 minutes.' });
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+      
+      // Clear the OTP if email sending failed
+      user.resetOTP = undefined;
+      user.resetOTPExpiry = undefined;
+      await user.save();
+      
+      res.status(500).json({ 
+        message: 'Failed to send OTP email. Please try again later.' 
+      });
+    }
   } catch (error) {
     console.error('Resend OTP error:', error);
     next(error);
@@ -317,7 +351,7 @@ export const verifyOTP = async (req: Request, res: Response, next: NextFunction)
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(400).json({ message: 'Invalid request' });
+      res.status(404).json({ message: 'No account found with this email address' });
       return;
     }
 
@@ -337,7 +371,7 @@ export const verifyOTP = async (req: Request, res: Response, next: NextFunction)
     }
 
     if (user.resetOTP !== otp) {
-      res.status(400).json({ message: 'Invalid OTP' });
+      res.status(400).json({ message: 'Invalid OTP. Please check your code and try again.' });
       return;
     }
 
