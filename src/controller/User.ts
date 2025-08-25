@@ -87,14 +87,14 @@ export const signup = async (req: Request, res: Response, next: NextFunction): P
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!username || !password) {
-      res.status(400).json({ message: 'Username and password are required' });
+    if (!email || !password) {
+      res.status(400).json({ message: 'Email and password are required' });
       return;
     }
 
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ email });
     if (!user) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
@@ -382,6 +382,60 @@ export const verifyOTP = async (req: Request, res: Response, next: NextFunction)
     });
   } catch (error) {
     console.error('OTP verification error:', error);
+    next(error);
+  }
+};
+
+export const updateUserAdminStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    const { isAdmin } = req.body;
+
+    if (typeof isAdmin !== 'boolean') {
+      res.status(400).json({ message: 'isAdmin must be a boolean' });
+      return;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isAdmin },
+      { new: true }
+    );
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.json({
+      message: 'User admin status updated successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isAdmin: user.isAdmin
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const users = await User.find({}, { password: 0, refreshToken: 0, resetOTP: 0, resetOTPExpiry: 0 });
+    
+    res.json({
+      users: users.map(user => ({
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }))
+    });
+  } catch (error) {
     next(error);
   }
 };

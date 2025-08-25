@@ -7,6 +7,8 @@ import {
   verifyOTPAndResetPassword,
   resendOTP,
   verifyOTP,
+  updateUserAdminStatus,
+  getAllUsers,
 } from '../controller/User';
 import { authenticate } from '../middleware/User';
 
@@ -22,5 +24,9 @@ userRouter.post('/request-password-reset', requestPasswordReset);
 userRouter.post('/verify-otp-reset-password', verifyOTPAndResetPassword);
 userRouter.post('/resend-otp', resendOTP);
 userRouter.post('/verify-otp', verifyOTP);
+
+//users list and admin-status
+userRouter.get('/users-list', getAllUsers);
+userRouter.patch('/users-list/:userId/admin-status', updateUserAdminStatus);
 
 export default userRouter;
