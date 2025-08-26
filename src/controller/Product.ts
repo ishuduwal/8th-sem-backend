@@ -180,45 +180,96 @@ export const recommendProducts = async (req: Request, res: Response): Promise<vo
     try {
         const { id } = req.params;
 
+        // Validate product ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            res.status(400).json({ message: "Invalid product ID" });
+            res.status(400).json({ 
+                error: "Invalid product ID",
+                message: "Please provide a valid product ID" 
+            });
             return;
         }
 
+        // Find the target product with proper error handling
         const targetProduct = await Product.findById(id)
             .select('name description category price mainImage');
             
         if (!targetProduct) {
-            res.status(404).json({ message: "Product not found" });
+            res.status(404).json({ 
+                error: "Product not found",
+                message: "The requested product does not exist" 
+            });
             return;
         }
 
-        if (!targetProduct.description || typeof targetProduct.description !== 'string') {
-            res.status(400).json({ message: "Product description is required for recommendations" });
+        // Validate that description exists and is a string
+        if (!targetProduct.description || typeof targetProduct.description !== 'string' || targetProduct.description.trim().length === 0) {
+            res.status(400).json({ 
+                error: "Insufficient product data",
+                message: "Product description is required for generating recommendations" 
+            });
             return;
         }
 
+        // Find other products with valid descriptions
         const products = await Product.find({
             _id: { $ne: id },
-            description: { $exists: true, $ne: null, $type: 'string' }
+            description: { 
+                $exists: true, 
+                $ne: null, 
+                $type: 'string',
+                $regex: /[a-zA-Z0-9]/, // Ensure description has some content
+            }
         }).select('name description category price mainImage');
 
+        // If no other products found
+        if (products.length === 0) {
+            res.status(200).json({
+                message: "No recommendations available",
+                recommendations: []
+            });
+            return;
+        }
+
+        // Enhanced similarity calculation
         const calculateSimilarityScore = (product: IProduct): number => {
-            const categorySimilarity = targetProduct.category.equals(product.category) ? 1 : 0;
+            let score = 0;
 
-            const targetDescription = targetProduct.description.toLowerCase();
-            const productDescription = product.description.toLowerCase();
-            
-            const targetWords = new Set(targetDescription.split(/\s+/));
-            const productWords = new Set(productDescription.split(/\s+/));
-            
-            const sharedWords = [...targetWords].filter(word => 
-                word && productWords.has(word)
-            ).length;
+            // Category similarity (30% weight)
+            if (targetProduct.category && product.category) {
+                const categorySimilarity = targetProduct.category.equals(product.category) ? 3 : 0;
+                score += categorySimilarity;
+            }
 
-            return sharedWords + categorySimilarity;
+            // Description similarity (70% weight)
+            if (targetProduct.description && product.description) {
+                const targetDescription = targetProduct.description.toLowerCase().trim();
+                const productDescription = product.description.toLowerCase().trim();
+                
+                // Split into words and filter out common stop words
+                const commonWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+                
+                const targetWords = new Set(
+                    targetDescription.split(/\s+/)
+                        .filter(word => word.length > 2 && !commonWords.has(word))
+                );
+                
+                const productWords = new Set(
+                    productDescription.split(/\s+/)
+                        .filter(word => word.length > 2 && !commonWords.has(word))
+                );
+
+                // Calculate Jaccard similarity for better results
+                const intersection = [...targetWords].filter(word => productWords.has(word)).length;
+                const union = new Set([...targetWords, ...productWords]).size;
+                
+                const jaccardSimilarity = union > 0 ? intersection / union : 0;
+                score += jaccardSimilarity * 7;
+            }
+
+            return parseFloat(score.toFixed(2));
         };
 
+        // Calculate scores and filter
         const recommendations = products
             .map(product => ({
                 product: {
@@ -231,17 +282,46 @@ export const recommendProducts = async (req: Request, res: Response): Promise<vo
                 },
                 score: calculateSimilarityScore(product)
             }))
-            .filter(item => item.score > 0)
+            .filter(item => item.score > 0) // Only include products with some similarity
             .sort((a, b) => b.score - a.score);
 
+        // Handle case where no similar products found
+        if (recommendations.length === 0) {
+            // Fallback: return random products if no similar ones found
+            const randomProducts = products
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 5)
+                .map(product => ({
+                    _id: product._id,
+                    name: product.name,
+                    price: product.price,
+                    description: product.description,
+                    mainImage: product.mainImage,
+                    category: product.category
+                }));
+
+            res.status(200).json({
+                message: "No similar products found. Here are some random recommendations",
+                recommendations: randomProducts,
+                fallback: true
+            });
+            return;
+        }
+
+        // Return top recommendations
         res.status(200).json({
             message: "Recommendations generated successfully",
             recommendations: recommendations.slice(0, 5).map(rec => rec.product),
+            totalFound: recommendations.length
         });
+
     } catch (error) {
         console.error("Error generating recommendations:", error);
+        
+        // More descriptive error response
         res.status(500).json({ 
-            message: "Error generating recommendations",
+            error: "Internal server error",
+            message: "Failed to generate product recommendations",
         });
     }
 };
