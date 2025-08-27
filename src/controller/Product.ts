@@ -119,25 +119,85 @@ export const getAllProducts = async (req: Request, res: Response): Promise<void>
         const limit = 10;
         const skip = (page - 1) * limit;
         
-        const searchQuery = req.query.search 
-            ? { name: { $regex: req.query.search as string, $options: 'i' } } 
-            : {};
+        // Build filter object
+        const filter: any = {};
+        
+        // Search filter
+        if (req.query.search) {
+            filter.name = { $regex: req.query.search as string, $options: 'i' };
+        }
+        
+        // Category filter
+        if (req.query.category) {
+            const categories = (req.query.category as string).split(',');
+            const validCategories = categories.filter(cat => mongoose.Types.ObjectId.isValid(cat));
+            if (validCategories.length > 0) {
+                filter.category = { $in: validCategories.map(cat => new mongoose.Types.ObjectId(cat)) };
+            }
+        }
+        
+        // Price filter
+        if (req.query.price) {
+            const priceRange = req.query.price as string;
+            const [min, max] = priceRange.split('-');
+            
+            if (min && max) {
+                filter.price = { $gte: parseFloat(min), $lte: parseFloat(max) };
+            } else if (min && !max) {
+                filter.price = { $gte: parseFloat(min) };
+            } else if (!min && max) {
+                filter.price = { $lte: parseFloat(max) };
+            }
+        }
+
+        // Build sort object
+        let sortObj: any = {};
+        const sortBy = req.query.sort as string;
+        
+        switch (sortBy) {
+            case 'price-asc':
+                sortObj = { price: 1 };
+                break;
+            case 'price-desc':
+                sortObj = { price: -1 };
+                break;
+            case 'rating':
+                sortObj = { averageRating: -1 };
+                break;
+            case 'name-asc':
+                sortObj = { name: 1 };
+                break;
+            case 'name-desc':
+                sortObj = { name: -1 };
+                break;
+            default: // newest
+                sortObj = { createdAt: -1 };
+                break;
+        }
 
         const [products, total] = await Promise.all([
-            Product.find(searchQuery)
+            Product.find(filter)
                 .populate('category', 'name')
+                .sort(sortObj)
                 .skip(skip)
                 .limit(limit),
-            Product.countDocuments(searchQuery)
+            Product.countDocuments(filter)
         ]);
 
         res.status(200).json({
             products,
             total,
             page,
-            pages: Math.ceil(total / limit)
+            pages: Math.ceil(total / limit),
+            filters: {
+                category: req.query.category || '',
+                price: req.query.price || '',
+                sort: req.query.sort || 'newest',
+                search: req.query.search || ''
+            }
         });
     } catch (error) {
+        console.error('Error fetching products:', error);
         res.status(500).json({ error: "Error fetching products" });
     }
 };
