@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Order, { IOrder, IOrderItem } from '../model/Order';
 import Product, { IProduct } from '../model/Product';
+import Cart from '../model/Cart';
 import mongoose from 'mongoose';
 import { 
   generateTransactionUuid, 
@@ -11,7 +12,184 @@ import {
   ESEWA_CONFIG
 } from '../utils/Esewa';
 
-// Create new order
+// Create new order from cart
+export const createOrderFromCart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { 
+      userEmail,
+      deliveryAddress, 
+      paymentMethod, 
+      taxAmount = 0, 
+      deliveryCharge = 0, 
+      notes 
+    } = req.body;
+
+    // Validation
+    if (!userEmail) {
+      await session.abortTransaction();
+      res.status(400).json({ message: 'User email is required' });
+      return;
+    }
+
+    if (!deliveryAddress || !deliveryAddress.fullName || !deliveryAddress.phoneNumber || !deliveryAddress.address || !deliveryAddress.city) {
+      await session.abortTransaction();
+      res.status(400).json({ message: 'Complete delivery address is required' });
+      return;
+    }
+
+    if (!['CASH_ON_DELIVERY', 'ESEWA'].includes(paymentMethod)) {
+      await session.abortTransaction();
+      res.status(400).json({ message: 'Invalid payment method' });
+      return;
+    }
+
+    // Get user's cart
+    const cart = await Cart.findOne({ userEmail }).session(session);
+    if (!cart || cart.items.length === 0) {
+      await session.abortTransaction();
+      res.status(400).json({ message: 'Cart is empty' });
+      return;
+    }
+
+    // Validate cart items and check stock
+    let totalAmount = 0;
+    const validatedItems: IOrderItem[] = [];
+    const stockUpdates: {productId: mongoose.Types.ObjectId, newStock: number}[] = [];
+
+    for (const cartItem of cart.items) {
+      const product = await Product.findById(cartItem.product).session(session) as IProduct | null;
+      if (!product) {
+        await session.abortTransaction();
+        res.status(400).json({ message: `Product not found: ${cartItem.name}` });
+        return;
+      }
+
+      if (product.stock < cartItem.quantity) {
+        await session.abortTransaction();
+        res.status(400).json({ 
+          message: `Insufficient stock for product: ${product.name}`,
+          details: {
+            productId: product._id,
+            productName: product.name,
+            availableStock: product.stock,
+            requestedQuantity: cartItem.quantity
+          }
+        });
+        return;
+      }
+
+      // Reduce product stock
+      product.stock -= cartItem.quantity;
+      await product.save({ session });
+      
+      // Record stock update for potential rollback
+      stockUpdates.push({
+        productId: product._id as mongoose.Types.ObjectId,
+        newStock: product.stock
+      });
+
+      const itemTotal = cartItem.price * cartItem.quantity;
+      totalAmount += itemTotal;
+
+      validatedItems.push({
+        product: product._id as mongoose.Types.ObjectId,
+        quantity: cartItem.quantity,
+        price: cartItem.price
+      });
+    }
+
+    const grandTotal = totalAmount + taxAmount + deliveryCharge;
+
+    // Create order data
+    const orderData: Partial<IOrder> = {
+      userInfo: {
+        email: userEmail,
+        username: userEmail.split('@')[0] // Extract username from email
+      },
+      items: validatedItems,
+      deliveryAddress,
+      paymentMethod,
+      totalAmount,
+      taxAmount,
+      deliveryCharge,
+      grandTotal,
+      notes,
+      paymentStatus: 'PENDING'
+    };
+
+    // Add eSewa transaction UUID if needed
+    if (paymentMethod === 'ESEWA') {
+      orderData.esewaTransactionUuid = generateTransactionUuid();
+    }
+
+    const order = new Order(orderData);
+    await order.save({ session });
+
+    // Clear cart after successful order creation
+    cart.items = [];
+    await cart.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Populate order for response
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.product', 'name price mainImage');
+
+    // Handle eSewa payment
+    if (paymentMethod === 'ESEWA') {
+      const paymentData = prepareEsewaPaymentData(
+        totalAmount,
+        taxAmount,
+        deliveryCharge,
+        order.esewaTransactionUuid!
+      );
+
+      res.status(201).json({
+        message: 'Order created successfully',
+        order: populatedOrder,
+        paymentData,
+        stockUpdates, // Include stock updates in response for debugging
+        instructions: {
+          message: 'To complete payment, submit a POST request to the gateway_url with the payment form data',
+          method: 'POST',
+          url: paymentData.gateway_url,
+          formData: {
+            amount: paymentData.amount,
+            tax_amount: paymentData.tax_amount,
+            total_amount: paymentData.total_amount,
+            transaction_uuid: paymentData.transaction_uuid,
+            product_code: paymentData.product_code,
+            product_service_charge: paymentData.product_service_charge,
+            product_delivery_charge: paymentData.product_delivery_charge,
+            success_url: paymentData.success_url,
+            failure_url: paymentData.failure_url,
+            signed_field_names: paymentData.signed_field_names,
+            signature: paymentData.signature
+          }
+        }
+      });
+      return;
+    }
+
+    res.status(201).json({
+      message: 'Order created successfully',
+      order: populatedOrder,
+      stockUpdates // Include stock updates in response for debugging
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Create order from cart error:', error);
+    next(error);
+  }
+};
+
+// Keep the original createOrder for backward compatibility if needed
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -161,7 +339,6 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     session.endSession();
   }
 };
-
 
 export const handleEsewaSuccess = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -466,6 +643,40 @@ export const getOrderById = async (req: Request, res: Response, next: NextFuncti
 
   } catch (error) {
     console.error('Get order by ID error:', error);
+    next(error);
+  }
+};
+
+export const getOrderStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { userEmail } = req.params;
+
+    if (!userEmail) {
+      res.status(400).json({ message: 'User email is required' });
+      return;
+    }
+
+    const [totalOrders, pendingOrders, confirmedOrders, deliveredOrders, totalSpent] = await Promise.all([
+      Order.countDocuments({ 'userInfo.email': userEmail }),
+      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'PENDING' }),
+      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'CONFIRMED' }),
+      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'DELIVERED' }),
+      Order.aggregate([
+        { $match: { 'userInfo.email': userEmail, paymentStatus: 'PAID' } },
+        { $group: { _id: null, total: { $sum: '$grandTotal' } } }
+      ])
+    ]);
+
+    res.json({
+      totalOrders,
+      pendingOrders,
+      confirmedOrders,
+      deliveredOrders,
+      totalSpent: totalSpent[0]?.total || 0
+    });
+
+  } catch (error) {
+    console.error('Get order stats error:', error);
     next(error);
   }
 };
