@@ -6,7 +6,7 @@ dotenv.config();
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET!;
 
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '5m';
 const REFRESH_TOKEN_EXPIRY ='1d';
 
 interface TokenPayload {

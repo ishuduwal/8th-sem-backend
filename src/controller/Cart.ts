@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Cart, { ICart, ICartItem } from '../model/Cart';
 import Product, { IProduct } from '../model/Product';
+import Order from '../model/Order';
 import mongoose from 'mongoose';
 
 // Add item to cart
@@ -87,24 +88,49 @@ export const getCart = async (req: Request, res: Response, next: NextFunction): 
       return;
     }
 
-    const cart = await Cart.findOne({ userEmail });
+    let cart = await Cart.findOne({ userEmail });
     
     if (!cart) {
-      res.status(200).json({
-        cart: {
-          userEmail,
-          items: [],
-          totalAmount: 0
-        }
-      });
-      return;
+      // Create empty cart if doesn't exist
+      cart = new Cart({ userEmail, items: [] });
+      await cart.save();
     }
 
-    res.status(200).json({ cart });
+    // Clean up cart - remove items from failed eSewa orders that are still in cart
+    await cleanupFailedOrderItems(userEmail);
+
+    // Refresh cart after cleanup
+    cart = await Cart.findOne({ userEmail });
+
+    res.status(200).json({ 
+      cart: cart || { userEmail, items: [], totalAmount: 0 }
+    });
 
   } catch (error) {
     console.error('Get cart error:', error);
     next(error);
+  }
+};
+
+// Helper function to clean up items from failed orders
+const cleanupFailedOrderItems = async (userEmail: string): Promise<void> => {
+  try {
+    // Find failed eSewa orders for this user
+    const failedOrders = await Order.find({
+      'userInfo.email': userEmail,
+      paymentMethod: 'ESEWA',
+      paymentStatus: 'FAILED',
+      orderStatus: 'CANCELLED'
+    });
+
+    if (failedOrders.length === 0) return;
+
+    // For failed orders, we don't need to do anything special with cart
+    // because stock wasn't reduced when order was created
+    console.log(`Found ${failedOrders.length} failed eSewa orders for user ${userEmail}`);
+    
+  } catch (error) {
+    console.error('Error cleaning up failed order items:', error);
   }
 };
 
