@@ -15,8 +15,8 @@ export interface IDeliveryAddress {
 }
 
 export interface IUserInfo {
-  email: string;
-  username: string;
+  userId: string;
+  username: string; // Only userId and username are needed
 }
 
 export interface IOrder extends Document {
@@ -89,7 +89,7 @@ const DeliveryAddressSchema: Schema = new Schema({
 });
 
 const UserInfoSchema: Schema = new Schema({
-  email: {
+  userId: {
     type: String,
     required: true,
     trim: true
@@ -99,6 +99,7 @@ const UserInfoSchema: Schema = new Schema({
     required: true,
     trim: true
   }
+  // REMOVED email field
 });
 
 const OrderSchema: Schema = new Schema({
@@ -184,7 +185,7 @@ const OrderSchema: Schema = new Schema({
   toObject: { virtuals: true }
 });
 
-OrderSchema.index({ 'userInfo.email': 1, createdAt: -1 });
+OrderSchema.index({ 'userInfo.userId': 1, createdAt: -1 });
 OrderSchema.index({ orderStatus: 1 });
 OrderSchema.index({ paymentStatus: 1 });
 

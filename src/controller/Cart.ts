@@ -7,10 +7,10 @@ import mongoose from 'mongoose';
 // Add item to cart
 export const addToCart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail, productId, quantity = 1 } = req.body;
+    const { userId, productId, quantity = 1 } = req.body;
 
-    if (!userEmail || !productId) {
-      res.status(400).json({ message: 'User email and product ID are required' });
+    if (!userId || !productId) {
+      res.status(400).json({ message: 'User ID and product ID are required' });
       return;
     }
 
@@ -33,9 +33,9 @@ export const addToCart = async (req: Request, res: Response, next: NextFunction)
     }
 
     // Find or create user's cart
-    let cart = await Cart.findOne({ userEmail });
+    let cart = await Cart.findOne({ userId });
     if (!cart) {
-      cart = new Cart({ userEmail, items: [] });
+      cart = new Cart({ userId, items: [] });
     }
 
     // Check if item already exists in cart
@@ -81,29 +81,36 @@ export const addToCart = async (req: Request, res: Response, next: NextFunction)
 // Get user's cart
 export const getCart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail } = req.params;
+    const { userId } = req.params;
 
-    if (!userEmail) {
-      res.status(400).json({ message: 'User email is required' });
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
       return;
     }
 
-    let cart = await Cart.findOne({ userEmail });
+    let cart = await Cart.findOne({ userId });
     
     if (!cart) {
-      // Create empty cart if doesn't exist
-      cart = new Cart({ userEmail, items: [] });
-      await cart.save();
+      try {
+        // Create empty cart if doesn't exist
+        cart = new Cart({ userId, items: [] });
+        await cart.save();
+      } catch (error: any) {
+        // Handle duplicate key error specifically
+        if (error.code === 11000) {
+          // If duplicate error, try to find the existing cart
+          cart = await Cart.findOne({ userId });
+          if (!cart) {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
-    // Clean up cart - remove items from failed eSewa orders that are still in cart
-    await cleanupFailedOrderItems(userEmail);
-
-    // Refresh cart after cleanup
-    cart = await Cart.findOne({ userEmail });
-
     res.status(200).json({ 
-      cart: cart || { userEmail, items: [], totalAmount: 0 }
+      cart: cart || { userId, items: [], totalAmount: 0 }
     });
 
   } catch (error) {
@@ -113,11 +120,11 @@ export const getCart = async (req: Request, res: Response, next: NextFunction): 
 };
 
 // Helper function to clean up items from failed orders
-const cleanupFailedOrderItems = async (userEmail: string): Promise<void> => {
+const cleanupFailedOrderItems = async (userId: string): Promise<void> => {
   try {
     // Find failed eSewa orders for this user
     const failedOrders = await Order.find({
-      'userInfo.email': userEmail,
+      'userInfo.userId': userId,
       paymentMethod: 'ESEWA',
       paymentStatus: 'FAILED',
       orderStatus: 'CANCELLED'
@@ -127,7 +134,7 @@ const cleanupFailedOrderItems = async (userEmail: string): Promise<void> => {
 
     // For failed orders, we don't need to do anything special with cart
     // because stock wasn't reduced when order was created
-    console.log(`Found ${failedOrders.length} failed eSewa orders for user ${userEmail}`);
+    console.log(`Found ${failedOrders.length} failed eSewa orders for user ${userId}`);
     
   } catch (error) {
     console.error('Error cleaning up failed order items:', error);
@@ -137,10 +144,10 @@ const cleanupFailedOrderItems = async (userEmail: string): Promise<void> => {
 // Update item quantity in cart
 export const updateCartItem = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail, productId, quantity } = req.body;
+    const { userId, productId, quantity } = req.body;
 
-    if (!userEmail || !productId || quantity === undefined) {
-      res.status(400).json({ message: 'User email, product ID, and quantity are required' });
+    if (!userId || !productId || quantity === undefined) {
+      res.status(400).json({ message: 'User ID, product ID, and quantity are required' });
       return;
     }
 
@@ -149,7 +156,7 @@ export const updateCartItem = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const cart = await Cart.findOne({ userEmail });
+    const cart = await Cart.findOne({ userId });
     if (!cart) {
       res.status(404).json({ message: 'Cart not found' });
       return;
@@ -199,14 +206,14 @@ export const updateCartItem = async (req: Request, res: Response, next: NextFunc
 // Remove item from cart
 export const removeFromCart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail, productId } = req.body;
+    const { userId, productId } = req.body;
 
-    if (!userEmail || !productId) {
-      res.status(400).json({ message: 'User email and product ID are required' });
+    if (!userId || !productId) {
+      res.status(400).json({ message: 'User ID and product ID are required' });
       return;
     }
 
-    const cart = await Cart.findOne({ userEmail });
+    const cart = await Cart.findOne({ userId });
     if (!cart) {
       res.status(404).json({ message: 'Cart not found' });
       return;
@@ -238,14 +245,14 @@ export const removeFromCart = async (req: Request, res: Response, next: NextFunc
 // Clear entire cart
 export const clearCart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail } = req.params;
+    const { userId } = req.params;
 
-    if (!userEmail) {
-      res.status(400).json({ message: 'User email is required' });
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
       return;
     }
 
-    const cart = await Cart.findOne({ userEmail });
+    const cart = await Cart.findOne({ userId });
     if (!cart) {
       res.status(200).json({ message: 'Cart is already empty' });
       return;
@@ -268,14 +275,14 @@ export const clearCart = async (req: Request, res: Response, next: NextFunction)
 // Get cart items count
 export const getCartCount = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail } = req.params;
+    const { userId } = req.params;
 
-    if (!userEmail) {
-      res.status(400).json({ message: 'User email is required' });
+    if (!userId) {
+      res.status(400).json({ message: 'User Id is required' });
       return;
     }
 
-    const cart = await Cart.findOne({ userEmail });
+    const cart = await Cart.findOne({ userId });
     const count = cart ? cart.items.reduce((total, item) => total + item.quantity, 0) : 0;
 
     res.status(200).json({ count });

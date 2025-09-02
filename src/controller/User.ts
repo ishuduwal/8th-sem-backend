@@ -56,12 +56,14 @@ export const signup = async (req: Request, res: Response, next: NextFunction): P
     const accessToken = generateAccessToken({ 
       userId: user._id.toString(), 
       username: user.username,
+      email: user.email,
       isAdmin: user.isAdmin
     });
     
     const refreshToken = generateRefreshToken({ 
       userId: user._id.toString(), 
       username: user.username,
+      email: user.email,
       isAdmin: user.isAdmin
     });
 
@@ -109,12 +111,14 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     const accessToken = generateAccessToken({ 
       userId: user._id.toString(), 
       username: user.username,
+      email: user.email,
       isAdmin: user.isAdmin
     });
     
     const refreshToken = generateRefreshToken({ 
       userId: user._id.toString(), 
       username: user.username,
+      email: user.email,
       isAdmin: user.isAdmin
     });
 
@@ -157,6 +161,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     const newAccessToken = generateAccessToken({
       userId: user._id.toString(),
       username: user.username,
+      email: user.email,
       isAdmin: user.isAdmin
     });
 

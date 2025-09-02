@@ -19,7 +19,7 @@ export const createOrderFromCart = async (req: Request, res: Response, next: Nex
 
   try {
     const { 
-      userEmail,
+      userId,
       deliveryAddress, 
       paymentMethod, 
       taxAmount = 0, 
@@ -28,9 +28,9 @@ export const createOrderFromCart = async (req: Request, res: Response, next: Nex
     } = req.body;
 
     // Validation
-    if (!userEmail) {
+    if (!userId) {
       await session.abortTransaction();
-      res.status(400).json({ message: 'User email is required' });
+      res.status(400).json({ message: 'User ID is required' });
       return;
     }
 
@@ -47,7 +47,7 @@ export const createOrderFromCart = async (req: Request, res: Response, next: Nex
     }
 
     // Get user's cart
-    const cart = await Cart.findOne({ userEmail }).session(session);
+    const cart = await Cart.findOne({ userId }).session(session);
     if (!cart || cart.items.length === 0) {
       await session.abortTransaction();
       res.status(400).json({ message: 'Cart is empty' });
@@ -95,8 +95,8 @@ export const createOrderFromCart = async (req: Request, res: Response, next: Nex
     // Create order data
     const orderData: Partial<IOrder> = {
       userInfo: {
-        email: userEmail,
-        username: userEmail.split('@')[0]
+        userId,
+        username: req.body.username 
       },
       items: validatedItems,
       deliveryAddress,
@@ -275,7 +275,7 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
         }
 
         // Clear user's cart
-        const cart = await Cart.findOne({ userEmail: order.userInfo.email }).session(session);
+        const cart = await Cart.findOne({ userId: order.userInfo.userId }).session(session);
         if (cart) {
           cart.items = [];
           await cart.save({ session });
@@ -305,7 +305,7 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
         }
 
         // Clear user's cart
-        const cart = await Cart.findOne({ userEmail: order.userInfo.email }).session(session);
+        const cart = await Cart.findOne({ userId: order.userInfo.userId }).session(session);
         if (cart) {
           cart.items = [];
           await cart.save({ session });
@@ -493,8 +493,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       notes 
     } = req.body;
 
-    if (!userInfo || !userInfo.email || !userInfo.username) {
-      res.status(400).json({ message: 'User info (email and username) is required' });
+    if (!userInfo || !userInfo.userId || !userInfo.username) {
+      res.status(400).json({ message: 'User info (ID and username) is required' });
       return;
     }
 
@@ -632,23 +632,23 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
 export const getOrdersByUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email } = req.params;
+    const { userId } = req.params;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
-    if (!email) {
-      res.status(400).json({ message: 'User email is required' });
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
       return;
     }
 
     const [orders, total] = await Promise.all([
-      Order.find({ 'userInfo.email': email })
+      Order.find({ 'userInfo.userId': userId })
         .populate('items.product', 'name price mainImage')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Order.countDocuments({ 'userInfo.email': email })
+      Order.countDocuments({ 'userInfo.userId': userId })
     ]);
 
     res.json({
@@ -717,20 +717,20 @@ export const getOrderById = async (req: Request, res: Response, next: NextFuncti
 
 export const getOrderStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { userEmail } = req.params;
+    const { userId } = req.params;
 
-    if (!userEmail) {
-      res.status(400).json({ message: 'User email is required' });
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
       return;
     }
 
     const [totalOrders, pendingOrders, confirmedOrders, deliveredOrders, totalSpent] = await Promise.all([
-      Order.countDocuments({ 'userInfo.email': userEmail }),
-      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'PENDING' }),
-      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'CONFIRMED' }),
-      Order.countDocuments({ 'userInfo.email': userEmail, orderStatus: 'DELIVERED' }),
+      Order.countDocuments({ 'userInfo.userId': userId }),
+      Order.countDocuments({ 'userInfo.userId': userId, orderStatus: 'PENDING' }),
+      Order.countDocuments({ 'userInfo.userId': userId, orderStatus: 'CONFIRMED' }),
+      Order.countDocuments({ 'userInfo.userId': userId, orderStatus: 'DELIVERED' }),
       Order.aggregate([
-        { $match: { 'userInfo.email': userEmail, paymentStatus: 'PAID' } },
+        { $match: { 'userInfo.userId': userId, paymentStatus: 'PAID' } },
         { $group: { _id: null, total: { $sum: '$grandTotal' } } }
       ])
     ]);

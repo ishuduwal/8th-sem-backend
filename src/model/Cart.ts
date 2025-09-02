@@ -10,7 +10,7 @@ export interface ICartItem {
 
 export interface ICart extends Document {
   _id: mongoose.Types.ObjectId;
-  userEmail: string;
+  userId: string;
   items: ICartItem[];
   totalAmount: number;
   createdAt: Date;
@@ -45,11 +45,10 @@ const CartItemSchema: Schema = new Schema({
 });
 
 const CartSchema: Schema = new Schema({
-  userEmail: {
+  userId: {
     type: String,
     required: true,
-    trim: true,
-    unique: true
+    trim: true
   },
   items: {
     type: [CartItemSchema],
@@ -71,6 +70,5 @@ CartSchema.pre<ICart>('save', function(next) {
   next();
 });
 
-CartSchema.index({ userEmail: 1 });
 
 export default mongoose.model<ICart>('Cart', CartSchema);

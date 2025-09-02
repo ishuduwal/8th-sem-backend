@@ -12,7 +12,7 @@ orderRouter.post('/from-cart', orderController.createOrderFromCart);
 orderRouter.post('/', orderController.createOrder); 
 
 // Order retrieval routes
-orderRouter.get('/user/:email', orderController.getOrdersByUser);
+orderRouter.get('/user/:userId', orderController.getOrdersByUser);
 orderRouter.get('/:orderId', orderController.getOrderById);
 orderRouter.get('/:orderId/payment-status', orderController.checkPaymentStatus);
 orderRouter.get('/', orderController.getAllOrders);
@@ -21,6 +21,6 @@ orderRouter.get('/', orderController.getAllOrders);
 orderRouter.put('/:orderId/status', orderController.updateOrderStatus);
 
 // Order stats
-orderRouter.get('/stats/:userEmail', orderController.getOrderStats);
+orderRouter.get('/stats/:userId', orderController.getOrderStats);
 
 export default orderRouter;
