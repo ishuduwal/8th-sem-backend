@@ -21,5 +21,6 @@ productRouter.post('/:productId/comments/:commentId/replies/:replyId/like', revi
 productRouter.delete('/:productId/comments/:commentId', reviewController.deleteComment);
 productRouter.delete('/:productId/comments/:commentId/replies/:replyId', reviewController.deleteReply);
 productRouter.get('/:productId/reviews', reviewController.getProductReviews);
+productRouter.get('/featured/products', productController.getFeaturedProducts);
 
 export default productRouter;

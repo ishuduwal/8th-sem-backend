@@ -385,3 +385,20 @@ export const recommendProducts = async (req: Request, res: Response): Promise<vo
         });
     }
 };
+
+export const getFeaturedProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Get top 8 products by average rating
+    const featuredProducts = await Product.find({ 
+      averageRating: { $exists: true, $gt: 0 } 
+    })
+      .sort({ averageRating: -1, createdAt: -1 })
+      .limit(8)
+      .populate('category', 'name');
+
+    res.status(200).json(featuredProducts);
+  } catch (error) {
+    console.error('Error fetching featured products:', error);
+    res.status(500).json({ error: "Error fetching featured products" });
+  }
+};
