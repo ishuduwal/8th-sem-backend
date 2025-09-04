@@ -402,3 +402,69 @@ export const getFeaturedProducts = async (req: Request, res: Response): Promise<
     res.status(500).json({ error: "Error fetching featured products" });
   }
 };
+
+export const getSearchSuggestions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const query = req.query.q as string;
+    const limit = parseInt(req.query.limit as string) || 5;
+
+    console.log('Search suggestions request:', { query, limit });
+
+    // Validate query parameter
+    if (!query || query.trim().length < 2) {
+      res.status(400).json({ 
+        error: "Query parameter 'q' is required and must be at least 2 characters",
+        suggestions: []
+      });
+      return;
+    }
+
+    const searchQuery = query.trim();
+
+    // Simple aggregation that should work
+    const suggestions = await Product.aggregate([
+      {
+        $match: {
+          $or: [
+            { name: { $regex: searchQuery, $options: 'i' } },
+            { description: { $regex: searchQuery, $options: 'i' } }
+          ],
+          stock: { $gt: 0 }
+        }
+      },
+      {
+        $sort: { name: 1 }
+      },
+      {
+        $limit: limit
+      },
+      {
+        $project: {
+          _id: { $toString: "$_id" }, // Convert ObjectId to string
+          name: 1,
+          price: 1,
+          originalPrice: 1,
+          mainImage: 1,
+          stock: 1,
+          category: 1
+        }
+      }
+    ]);
+
+    console.log('Search suggestions found:', suggestions.length);
+    console.log('First suggestion:', suggestions[0]);
+
+    res.status(200).json({
+      suggestions: suggestions,
+      query: searchQuery,
+      total: suggestions.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching search suggestions:', error);
+    res.status(500).json({ 
+      error: "Error fetching search suggestions",
+      suggestions: []
+    });
+  }
+};
