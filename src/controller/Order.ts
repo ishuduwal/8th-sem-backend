@@ -203,8 +203,8 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
     const { data } = req.query; 
 
     if (!data) {
-      res.status(400).json({ message: 'Payment response data is required' });
-      return;
+      // Redirect to frontend failure page
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Payment response data is required`);
     }
 
     console.log('Received eSewa success data:', data);
@@ -235,17 +235,17 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
 
     if (!isValidSignature) {
       await session.abortTransaction();
-      res.status(400).json({ message: 'Invalid payment signature' });
-      return;
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Invalid payment signature`);
     }
 
     // Find order
     const order = await Order.findOne({ esewaTransactionUuid: transaction_uuid }).session(session);
     if (!order) {
       await session.abortTransaction();
-      res.status(404).json({ message: 'Order not found' });
-      return;
+      return res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Order not found`);
     }
+
+    let paymentSuccessful = false;
 
     // Double-check payment status with eSewa
     try {
@@ -281,9 +281,12 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
           await cart.save({ session });
         }
 
+        paymentSuccessful = true;
+
       } else {
         order.paymentStatus = 'FAILED';
         order.orderStatus = 'CANCELLED';
+        paymentSuccessful = false;
       }
 
     } catch (statusError) {
@@ -310,28 +313,43 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
           cart.items = [];
           await cart.save({ session });
         }
+        paymentSuccessful = true;
       } else {
         order.paymentStatus = 'FAILED';
         order.orderStatus = 'CANCELLED';
+        paymentSuccessful = false;
       }
     }
 
     await order.save({ session });
     await session.commitTransaction();
 
+    // Populate order for frontend display
     const populatedOrder = await Order.findById(order._id)
       .populate('items.product', 'name price mainImage');
 
-    res.json({
-      message: order.paymentStatus === 'PAID' ? 'Payment successful' : 'Payment failed',
+    // Prepare data for frontend
+    const frontendData = {
+      message: paymentSuccessful ? "Payment successful" : "Payment failed",
       order: populatedOrder,
       paymentDetails: paymentResponse
-    });
+    };
+
+    // Encode data for URL parameter
+    const encodedData = encodeURIComponent(JSON.stringify(frontendData));
+
+    // Redirect to frontend with data
+    if (paymentSuccessful) {
+      res.redirect(`${process.env.FRONTEND_URL}/payment/success?data=${encodedData}`);
+    } else {
+      res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Payment verification failed&data=${encodedData}`);
+    }
 
   } catch (error) {
     await session.abortTransaction();
     console.error('eSewa success handler error:', error);
-    next(error);
+    // Redirect to frontend failure page
+    res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Payment processing failed`);
   } finally {
     session.endSession();
   }
@@ -339,10 +357,23 @@ export const handleEsewaSuccess = async (req: Request, res: Response, next: Next
 
 export const handleEsewaFailure = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { transaction_uuid } = req.query;
+    const { data, transaction_uuid } = req.query;
 
     console.log('eSewa payment failure:', req.query);
 
+    let errorMessage = 'Payment was cancelled or failed';
+
+    // Try to decode error message from eSewa if available
+    if (data) {
+      try {
+        const decodedResponse = decodeEsewaResponse(data as string);
+        errorMessage = decodedResponse.message || 'Payment was cancelled or failed';
+      } catch (decodeError) {
+        console.log('Could not decode eSewa failure data');
+      }
+    }
+
+    // Update order status if transaction_uuid is available
     if (transaction_uuid) {
       const order = await Order.findOne({ esewaTransactionUuid: transaction_uuid });
       if (order) {
@@ -352,14 +383,13 @@ export const handleEsewaFailure = async (req: Request, res: Response, next: Next
       }
     }
 
-    res.json({ 
-      message: 'Payment cancelled or failed',
-      transaction_uuid,
-      status: 'FAILED'
-    });
+    // Redirect to frontend failure page
+    res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=${encodeURIComponent(errorMessage)}`);
+
   } catch (error) {
     console.error('eSewa failure handler error:', error);
-    next(error);
+    // Still redirect to frontend even if there's an error
+    res.redirect(`${process.env.FRONTEND_URL}/payment/failed?error=Payment failed`);
   }
 };
 

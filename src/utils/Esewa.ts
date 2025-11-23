@@ -11,7 +11,8 @@ export const ESEWA_CONFIG = {
     ? 'https://epay.esewa.com.np/api/epay/transaction/status/'
     : 'https://rc-epay.esewa.com.np/api/epay/transaction/status/',
   SUCCESS_URL: process.env.ESEWA_SUCCESS_URL || 'http://localhost:5000/api/order/esewa/success',
-  FAILURE_URL: process.env.ESEWA_FAILURE_URL || 'http://localhost:5000/api/order/esewa/failure'
+  FAILURE_URL: process.env.ESEWA_FAILURE_URL || 'http://localhost:5000/api/order/esewa/failure',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173'
 };
 
 // Generate signature for payment request

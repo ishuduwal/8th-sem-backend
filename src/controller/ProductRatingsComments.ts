@@ -1,4 +1,3 @@
-// controller/ProductRatingsComments.ts
 import { Request, Response } from 'express';
 import Product, { IProduct, IComment, IReply, IRating } from '../model/Product';
 import mongoose from 'mongoose';
