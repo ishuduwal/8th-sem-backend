@@ -12,13 +12,15 @@ import dashboardRouter from "./router/Dashboard";
 dotenv.config();
 
 const app = express();
-const PORT = 5000;
+
+// IMPORTANT FIX FOR RENDER 🚀
+const PORT = process.env.PORT || 5000;
+
 const mongodb = process.env.mongodb || "";
 
 app.use(cors()); 
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true })); 
-
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -33,12 +35,17 @@ app.use('/api/order', orderRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/dashboard', dashboardRouter);
 
-mongoose.connect(mongodb).then(() => {
-    console.log('Connected to mongodb');
-    console.log("Hwllo from sever");
+mongoose
+  .connect(mongodb)
+  .then(() => {
+    console.log("Connected to mongodb");
+    console.log("Hello from server");
+
+    // IMPORTANT FIX FOR RENDER 🚀
     app.listen(PORT, () => {
-        console.log(`Server is running at http://localhost:${PORT}`);
+      console.log(`Server running on port ${PORT}`);
     });
-}).catch((error) => {
-    console.error('Mongodb connection error:', error);
-});  
+  })
+  .catch((error) => {
+    console.error("Mongodb connection error:", error);
+  });
